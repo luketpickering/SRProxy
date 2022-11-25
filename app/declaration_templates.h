@@ -109,7 +109,7 @@ std::string const hdr_body = R"(
 template<> class {1}{2}
 {{
 public:
-  Proxy(TTree* tr, const std::string& name, long base, int offset);
+  Proxy(TTree* tr, const std::string& name, const long &base, int offset);
   Proxy(TTree* tr, const std::string& name) : Proxy(tr, name, 0, 0) {{}}
   Proxy(const Proxy&) = delete;
   Proxy(const Proxy&&) = delete;
@@ -144,7 +144,7 @@ namespace
 //{3} == AssignBody
 //{4} == CheckEqualsBody
 std::string const cxx_body = R"(
-{0}::Proxy(TTree* tr, const std::string& name, long base, int offset) :
+{0}::Proxy(TTree* tr, const std::string& name, const long &base, int offset) :
 {1}
 {{
 }}
