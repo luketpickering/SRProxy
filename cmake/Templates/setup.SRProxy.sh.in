@@ -77,11 +77,17 @@ else
   SETUPDIR=$(readlink -f ${BASH_SOURCE%/*}/..)
 fi
 
-export SRPROXY_VERSION=@SRPROXY_VERSION@
-export SRPROXY_INC=${SETUPDIR}/include
+export SRProxy_VERSION=@PROJECT_VERSION@
+export SRProxy_ROOT=${SETUPDIR}
+export SRProxy_INC=${SETUPDIR}/include
 
 add_to_PATH ${SETUPDIR}/bin
-add_to_LD_LIBRARY_PATH ${SETUPDIR}/lib
+if [ -e ${SETUPDIR}/lib ]; then
+  add_to_LD_LIBRARY_PATH ${SETUPDIR}/lib
+fi
+if [ -e ${SETUPDIR}/lib64 ]; then
+  add_to_LD_LIBRARY_PATH ${SETUPDIR}/lib64
+fi
 add_to_CMAKE_PREFIX_PATH ${SETUPDIR}
 
 unset SETUPDIR
