@@ -99,24 +99,50 @@ function(GenSRProxy)
     endforeach()
   endif()
 
-  add_custom_command(
-    OUTPUT ${OPTS_OUTPUT_NAME}.cxx ${OPTS_OUTPUT_NAME}.h FwdDeclare.h
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMAND $<TARGET_FILE:gen_srproxy>
-         ${FLAT_ARG} 
-         -i ${OPTS_HEADER} 
-         -o ${OPTS_OUTPUT_NAME}
-         ${TARGET_ARG}
-         ${INCLUDE_ARG}
-         ${DEFINITIONS_ARGS}
-         ${OUTPUT_PATH_ARG}
-         ${EPILOG_ARG}
-         ${EPILOG_FWD_ARG}
-         ${PROLOG_ARG}
-         ${EXTRAS_ARGS}
-         ${VERBOSE_ARG}
-         ${VVERBOSE_ARG}
-         -od ${CMAKE_CURRENT_BINARY_DIR}
-    DEPENDS gen_srproxy ${DEPENDENCIES})
+  if(TARGET gen_srproxy)
+    add_custom_command(
+      OUTPUT ${OPTS_OUTPUT_NAME}.cxx ${OPTS_OUTPUT_NAME}.h FwdDeclare.h
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMAND $<TARGET_FILE:gen_srproxy>
+           ${FLAT_ARG} 
+           -i ${OPTS_HEADER} 
+           -o ${OPTS_OUTPUT_NAME}
+           ${TARGET_ARG}
+           ${INCLUDE_ARG}
+           ${DEFINITIONS_ARGS}
+           ${OUTPUT_PATH_ARG}
+           ${EPILOG_ARG}
+           ${EPILOG_FWD_ARG}
+           ${PROLOG_ARG}
+           ${EXTRAS_ARGS}
+           ${VERBOSE_ARG}
+           ${VVERBOSE_ARG}
+           -od ${CMAKE_CURRENT_BINARY_DIR}
+      DEPENDS gen_srproxy ${DEPENDENCIES})
+  else()
+    if(NOT EXISTS ${SRProxy_GENSRProxy_APP})
+      message(FATAL_ERROR "GenSRProxy called but gen_srproxy is not a target in the current CMake invocation and the expected relatively location of the gen_srproxy binary, ${SRProxy_GENSRProxy_APP}, doesn't seem valid.")
+    endif()
+
+    add_custom_command(
+      OUTPUT ${OPTS_OUTPUT_NAME}.cxx ${OPTS_OUTPUT_NAME}.h FwdDeclare.h
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMAND ${SRProxy_GENSRProxy_APP}
+           ${FLAT_ARG} 
+           -i ${OPTS_HEADER} 
+           -o ${OPTS_OUTPUT_NAME}
+           ${TARGET_ARG}
+           ${INCLUDE_ARG}
+           ${DEFINITIONS_ARGS}
+           ${OUTPUT_PATH_ARG}
+           ${EPILOG_ARG}
+           ${EPILOG_FWD_ARG}
+           ${PROLOG_ARG}
+           ${EXTRAS_ARGS}
+           ${VERBOSE_ARG}
+           ${VVERBOSE_ARG}
+           -od ${CMAKE_CURRENT_BINARY_DIR}
+      DEPENDS ${DEPENDENCIES})
+  endif()
 
 endfunction(GenSRProxy)
