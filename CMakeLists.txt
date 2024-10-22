@@ -26,6 +26,8 @@ CPMAddPackage(
 
 find_package(ROOT 6.20 REQUIRED)
 
+include(GenSRProxy)
+
 add_subdirectory(app)
 add_subdirectory(src)
 
@@ -48,6 +50,7 @@ configure_package_config_file(
 )
 
 install(EXPORT SRProxyTargets
+        NAMESPACE SRProxy::
         DESTINATION lib/cmake/SRProxy)
 install(FILES "${PROJECT_BINARY_DIR}/SRProxyConfigVersion.cmake"
               "${PROJECT_BINARY_DIR}/SRProxyConfig.cmake"

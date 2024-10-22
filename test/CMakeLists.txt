@@ -1,5 +1,3 @@
-include(GenSRProxy)
-
 GenSRProxy(
   HEADER test.h
   OUTPUT_NAME TestTargetproxy
