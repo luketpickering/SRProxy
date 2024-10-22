@@ -14,7 +14,9 @@ find_program(CMAKE_CXX_COMPILER NAMES $ENV{CXX} g++ PATHS ENV PATH NO_DEFAULT_PA
 
 option(TESTS_ENABLED "Whether to enable tests, OFF by default" OFF)
 
-include(${CMAKE_CURRENT_LIST_DIR}/cmake/Modules/CPM.cmake)
+LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake/Modules)
+
+include(CPM)
 
 CPMAddPackage(
     NAME fmt
