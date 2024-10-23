@@ -4,8 +4,8 @@
 
 #include "TTree.h"
 
+#include <array>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 namespace flat {
@@ -54,7 +54,7 @@ template <class T> struct is_vec<std::vector<T>> {
 
 // Serialize most types as-is, but represent enums with short
 template <class T> struct FlatType {
-  typedef std::conditional_t<std::is_enum<T>::value, short, T> type;
+  typedef std::conditional_t<std::is_enum_v<T>, short, T> type;
 };
 /// Prevent bit-packed vector<bool>
 template <> struct FlatType<bool> {
@@ -66,26 +66,24 @@ template <> struct FlatType<long long int> {
 };
 
 template <class T> class Flat {
-  static_assert(std::is_arithmetic<typename FlatType<T>::type>::value,
+  static_assert(std::is_arithmetic_v<typename FlatType<T>::type>,
                 "Invalid type for basic type Flat");
 
 public:
   Flat(TTree *tr, const std::string &name, const std::string &totsize,
        const IBranchPolicy *policy)
       : fBranch(0) {
-    if (policy && !policy->Include(name))
+    if (policy && !policy->Include(name)) {
       return;
-
-    fData.emplace_back(); // needed to get an address
-    T *target = (T *)&fData.front();
-    fData.clear();
+    }
 
     const char code = rootcode<typename FlatType<T>::type>::code;
 
     if (totsize.empty()) { // this branch is not an array
-      fBranch = tr->Branch(name.c_str(), target, (name + "/" + code).c_str());
+      fBranch = tr->Branch(name.c_str(), static_cast<T *>(nullptr),
+                           (name + "/" + code).c_str());
     } else { // needs to be an array - the size is given by 'totsize'
-      fBranch = tr->Branch(name.c_str(), target,
+      fBranch = tr->Branch(name.c_str(), static_cast<T *>(nullptr),
                            (name + "[" + totsize + "]/" + code).c_str());
     }
   }
@@ -100,8 +98,7 @@ public:
     if (fBranch && fData.capacity() != oldcap) {
       // The vector re-allocated, so we need to point the branch to the new
       // location.
-      T *target = (T *)&fData.front();
-      fBranch->SetAddress(target);
+      fBranch->SetAddress(fData.data());
     }
   }
 
@@ -114,31 +111,34 @@ template <class T> class Flat<std::vector<T>> {
 public:
   Flat(TTree *tr, const std::string &name, const std::string &totsize,
        const IBranchPolicy *policy)
-      : fLength(tr, name + "..length", totsize, policy), fIdx(0),
+      : fLength(tr, name + "..length", totsize, policy), fIdx(nullptr),
         fTotArraySize(0),
         fData(tr, SubName(name), SubLengthName(tr, name, totsize), policy) {
     // Would always be zero if this vector was not nested inside any others
     if (!totsize.empty()) {
-      fIdx = new Flat<int>(tr, name + "..idx", totsize, policy);
+      fIdx = std::make_unique<Flat<int>>(tr, name + "..idx", totsize, policy);
     }
   }
 
-  ~Flat() { delete fIdx; }
+  ~Flat() = default;
 
   void Clear() {
     fLength.Clear();
-    if (fIdx)
+    if (fIdx) {
       fIdx->Clear();
+    }
     fTotArraySize = 0;
     fData.Clear();
   }
 
   void Fill(const std::vector<T> &xs) {
-    for (const T &x : xs)
+    for (const T &x : xs) {
       fData.Fill(x);
+    }
     fLength.Fill(xs.size());
-    if (fIdx)
+    if (fIdx) {
       fIdx->Fill(fTotArraySize);
+    }
     fTotArraySize += xs.size();
   }
 
@@ -146,15 +146,17 @@ protected:
   std::string SubName(const std::string &name) const {
     // Nested containers would have the same name for length and idx at each
     // level, which is bad, so uniquify them.
-    if (is_vec<T>::value || std::is_array<T>::value)
+    if (is_vec<T>::value || std::is_array_v<T>) {
       return name + ".elems";
+    }
     return name;
   }
 
   std::string SubLengthName(TTree *tr, const std::string &name,
                             const std::string &totsize) {
-    if (totsize.empty())
+    if (totsize.empty()) {
       return name + "..length";
+    }
 
     const std::string ret = name + "..totarraysize";
     tr->Branch(ret.c_str(), &fTotArraySize, (ret + "/I").c_str());
@@ -163,7 +165,7 @@ protected:
   }
 
   Flat<int> fLength;
-  Flat<int> *fIdx;
+  std::unique_ptr<Flat<int>> fIdx;
 
   int fTotArraySize;
 
@@ -175,28 +177,31 @@ template <class T, int N> class FlatOutOfLineArray {
 public:
   FlatOutOfLineArray(TTree *tr, const std::string &name,
                      const std::string &totsize, const IBranchPolicy *policy)
-      : fIdx(0), fTotArraySize(0),
+      : fIdx(nullptr), fTotArraySize(0),
         fData(tr, SubName(name), SubLengthName(tr, name, totsize), policy) {
     // Would always be zero if this vector was not nested inside any others
     if (!totsize.empty()) {
-      fIdx = new Flat<int>(tr, name + "..idx", totsize, policy);
+      fIdx = std::make_unique<Flat<int>>(tr, name + "..idx", totsize, policy);
     }
   }
 
-  ~FlatOutOfLineArray() { delete fIdx; }
+  ~FlatOutOfLineArray() = default;
 
   void Clear() {
     fTotArraySize = 0;
-    if (fIdx)
+    if (fIdx) {
       fIdx->Clear();
+    }
     fData.Clear();
   }
 
   void Fill(const T *xs) {
-    for (int i = 0; i < N; ++i)
+    for (int i = 0; i < N; ++i) {
       fData.Fill(xs[i]);
-    if (fIdx)
+    }
+    if (fIdx) {
       fIdx->Fill(fTotArraySize);
+    }
     fTotArraySize += N;
   }
 
@@ -204,15 +209,17 @@ protected:
   std::string SubName(const std::string &name) const {
     // Nested contains would have the same name for length and idx at each
     // level, which is bad, so uniquify them.
-    if (is_vec<T>::value || std::is_array<T>::value)
+    if (is_vec<T>::value || std::is_array_v<T>) {
       return name + ".elems";
+    }
     return name;
   }
 
   std::string SubLengthName(TTree *tr, const std::string &name,
                             const std::string &totsize) {
-    if (totsize.empty())
+    if (totsize.empty()) {
       return std::to_string(N);
+    }
 
     const std::string ret = name + "..totarraysize";
     tr->Branch(ret.c_str(), &fTotArraySize, (ret + "/I").c_str());
@@ -220,7 +227,7 @@ protected:
     return ret;
   }
 
-  Flat<int> *fIdx;
+  std::unique_ptr<Flat<int>> fIdx;
 
   int fTotArraySize;
 
@@ -236,28 +243,27 @@ public:
   FlatInlineArray(TTree *tr, const std::string &name,
                   const std::string &totsize, const IBranchPolicy *policy) {
     for (int i = 0; i < N; ++i) {
-      fData[i] =
-          new Flat<T>(tr, name + "." + std::to_string(i), totsize, policy);
+      fData[i] = std::make_unique<Flat<T>>(tr, name + "." + std::to_string(i),
+                                           totsize, policy);
     }
   }
 
-  ~FlatInlineArray() {
-    for (Flat<T> *d : fData)
-      delete d;
-  }
+  ~FlatInlineArray() = default;
 
   void Clear() {
-    for (Flat<T> *d : fData)
+    for (auto &d : fData) {
       d->Clear();
+    }
   }
 
   void Fill(const T *xs) {
-    for (unsigned int i = 0; i < N; ++i)
+    for (unsigned int i = 0; i < N; ++i) {
       fData[i]->Fill(xs[i]);
+    }
   }
 
 protected:
-  Flat<T> *fData[N];
+  std::array<std::unique_ptr<Flat<T>>, N> fData;
 };
 
 /// Critical size at which we switch from "inline" to vector-style arrays

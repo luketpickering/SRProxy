@@ -1,15 +1,13 @@
 #pragma once
 
-#include "Rtypes.h" // for Long64_t which cling sometimes sneaks in
-
 #include <array>
-#include <set>
-#include <string>
-#include <type_traits>
-#include <vector>
-
 #include <cassert>
 #include <cmath> // for std::isinf and std::isnan
+#include <memory>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 class TFormLeafInfo;
 class TBranch;
@@ -18,10 +16,8 @@ class TTreeFormula;
 class TTree;
 
 namespace caf {
-
-static const long kDummyBase = 0;
-
-std::string StripSubscripts(const std::string &s);
+/// this constant is passed by reference into the various Proxy constructors.
+inline const long kDummyBase = 0;
 
 class SRBranchRegistry {
 public:
@@ -58,16 +54,47 @@ template <class T> class Proxy;
 
 class Restorer;
 
-template <class T> class Proxy {
+/// Base class for all proxy types, intended to help trace ancestry
+class Lineage {
 public:
-  static_assert(std::is_arithmetic<T>::value || std::is_enum<T>::value ||
-                    std::is_same<T, std::string>::value,
+  /// note: this is NOT a copy constructor!  Specifies the object that's this
+  /// one's parent.
+  explicit Lineage(const Lineage *parent) : fParent(parent) {}
+  virtual ~Lineage() = default;
+
+  /// \brief Search through the stored lineage to find ancestor of given type.
+  /// If multiple, returns only the closest one.
+  /// \tparam T   Object type to look for (e.g.: SRProxy)
+  /// \return  Pointer to closest ancestor (fewest links separating them) of
+  /// type T, or nullptr if none found
+  template <typename T> const T *Ancestor() const {
+    const Lineage *candAnc = this;
+    while ((candAnc = candAnc->Parent())) {
+      if (auto ret = dynamic_cast<const T *>(candAnc)) {
+        return ret;
+      }
+    }
+    return nullptr;
+  }
+
+  const Lineage *Parent() const { return fParent; }
+
+private:
+  const Lineage *fParent = nullptr;
+};
+
+template <class T> class Proxy : public Lineage {
+public:
+  static_assert(std::is_arithmetic_v<T> || std::is_enum_v<T> ||
+                    std::is_same_v<T, std::string>,
                 "Invalid type for basic type Proxy");
 
   friend class Restorer;
 
-  Proxy(TTree *tr, const std::string &name, const long &base, int offset);
-  Proxy(TTree *tr, const std::string &name) : Proxy(tr, name, kDummyBase, 0) {}
+  Proxy(TTree *tr, const std::string &name, const long &base, int offset,
+        const Lineage *parent = nullptr);
+  Proxy(TTree *tr, const std::string &name)
+      : Proxy(tr, name, kDummyBase, 0, nullptr) {}
 
   // Need to be copyable because Vars return us directly
   Proxy(const Proxy &);
@@ -107,7 +134,7 @@ protected:
 
   // The type to fetch from the TLeaf - get template errors inside of ROOT
   // for enums.
-  typedef typename std::conditional_t<std::is_enum<T>::value, int, T> U;
+  typedef typename std::conditional_t<std::is_enum_v<T>, int, T> U;
 
   // Shared
   std::string fName;
@@ -123,21 +150,22 @@ protected:
   // Nested
   mutable TFormLeafInfo *fLeafInfo;
   mutable TBranch *fBranch;
-  mutable TTreeFormula *fTTF;
+  mutable std::unique_ptr<TTreeFormula> fTTF;
   mutable long fEntry;
   mutable int fSubIdx;
 };
 
 // Helper functions that don't need to be templated
-class ArrayVectorProxyBase {
+class ArrayVectorProxyBase : public Lineage {
 public:
   std::string Name() const { return fName; }
 
 protected:
   ArrayVectorProxyBase(TTree *tr, const std::string &name,
-                       bool isNestedContainer, const long &base, int offset);
+                       bool isNestedContainer, const long &base, int offset,
+                       const Lineage *parent = nullptr);
 
-  virtual ~ArrayVectorProxyBase();
+  ~ArrayVectorProxyBase() = default;
 
   void EnsureIdxP() const;
 
@@ -159,14 +187,14 @@ protected:
   CAFType fType;
   const long &fBase;
   int fOffset;
-  mutable Proxy<long long> *fIdxP;
+  mutable std::unique_ptr<Proxy<long long>> fIdxP;
   mutable long fIdx;
 };
 
 // Helper functions that don't need to be templated
 class VectorProxyBase : public ArrayVectorProxyBase {
 public:
-  virtual ~VectorProxyBase();
+  ~VectorProxyBase() = default;
 
   size_t size() const;
   bool empty() const;
@@ -174,29 +202,28 @@ public:
 
 protected:
   VectorProxyBase(TTree *tr, const std::string &name, bool isNestedContainer,
-                  const long &base, int offset);
+                  const long &base, int offset,
+                  const Lineage *parent = nullptr);
 
   std::string LengthField() const;
   /// Helper for LengthField()
   std::string NName() const;
 
   void EnsureSizeExists() const;
-  mutable Proxy<int> *fSize; ///< only initialized on-demand
+  mutable std::unique_ptr<Proxy<int>> fSize; ///< only initialized on-demand
 };
 
 template <class T> class Proxy<std::vector<T>> : public VectorProxyBase {
 public:
-  Proxy(TTree *tr, const std::string &name, const long &base, int offset)
-      : VectorProxyBase(tr, name, is_vec<T>::value || std::is_array<T>::value,
-                        base, offset) {}
+  Proxy(TTree *tr, const std::string &name, const long &base, int offset,
+        const Lineage *parent)
+      : VectorProxyBase(tr, name, is_vec<T>::value || std::is_array_v<T>, base,
+                        offset, parent) {}
 
   Proxy(TTree *tr, const std::string &name)
-      : Proxy(0, tr, name, kDummyBase, 0) {}
+      : Proxy(tr, name, kDummyBase, 0, nullptr) {}
 
-  ~Proxy() {
-    for (Proxy<T> *e : fElems)
-      delete e;
-  }
+  ~Proxy() = default;
 
   Proxy &operator=(const Proxy<std::vector<T>> &) = delete;
   Proxy(const Proxy<std::vector<T>> &v) = delete;
@@ -255,18 +282,23 @@ protected:
   /// Implies CheckIndex()
   void EnsureLongEnough(size_t i) const {
     CheckIndex(i, size());
-    if (i >= fElems.size())
+    if (i >= fElems.size()) {
       fElems.resize(i + 1);
+    }
 
     EnsureIdxP();
-    if (fIdxP)
+    if (fIdxP) {
       fIdx = *fIdxP; // store into an actual value we can point to
-
-    if (!fElems[i])
-      fElems[i] = new Proxy<T>(fTree, Subscript(i), fIdx, i);
+    }
+    // note that the contained elements should point to the vector's parent, not
+    // the vector
+    if (!fElems[i]) {
+      fElems[i] = std::make_unique<Proxy<T>>(fTree, Subscript(i), fIdx, i,
+                                             this->Parent());
+    }
   }
 
-  mutable std::vector<Proxy<T> *> fElems;
+  mutable std::vector<std::unique_ptr<Proxy<T>>> fElems;
 };
 
 // Retain an alias to the old naming scheme for now
@@ -276,11 +308,13 @@ template <class T> using VectorProxy = Proxy<std::vector<T>>;
 template <class T>
 bool operator<(const Proxy<std::vector<T>> &a, const std::vector<T> &b) {
   const size_t N = a.size();
-  if (N != b.size())
+  if (N != b.size()) {
     return N < b.size();
+  }
   for (size_t i = 0; i < N; ++i) {
-    if (a[i] != b[i])
+    if (a[i] != b[i]) {
       return a[i] < b[i];
+    }
   }
   return false;
 }
@@ -288,66 +322,72 @@ bool operator<(const Proxy<std::vector<T>> &a, const std::vector<T> &b) {
 template <class T, unsigned int N>
 class Proxy<T[N]> : public ArrayVectorProxyBase {
 public:
-  Proxy(TTree *tr, const std::string &name, const long &base, int offset)
-      : ArrayVectorProxyBase(tr, name,
-                             is_vec<T>::value || std::is_array<T>::value, base,
-                             offset) {
-    fElems.fill(0); // ensure initialized to null
+  Proxy(TTree *tr, const std::string &name, const long &base, int offset,
+        const Lineage *parent)
+      : ArrayVectorProxyBase(tr, name, is_vec<T>::value || std::is_array_v<T>,
+                             base, offset) {
+    for (auto &el : fElems) {
+      el = nullptr;
+    }
   }
 
-  Proxy(TTree *tr, const std::string &name) : Proxy(tr, name, kDummyBase, 0) {}
+  Proxy(TTree *tr, const std::string &name)
+      : Proxy(tr, name, kDummyBase, 0, nullptr) {}
 
-  ~Proxy() {
-    for (Proxy<T> *e : fElems)
-      delete e;
-  }
+  ~Proxy() = default;
 
   Proxy &operator=(const Proxy<T[N]> &) = delete;
   Proxy(const Proxy<T[N]> &v) = delete;
 
   const Proxy<T> &operator[](size_t i) const {
     EnsureElem(i);
-    if (fIdxP)
+    if (fIdxP) {
       fIdx = *fIdxP;
+    }
     return *fElems[i];
   }
   Proxy<T> &operator[](size_t i) {
     EnsureElem(i);
-    if (fIdxP)
+    if (fIdxP) {
       fIdx = *fIdxP;
+    }
     return *fElems[i];
   }
 
   Proxy<T[N]> &operator=(const T (&x)[N]) {
-    for (unsigned int i = 0; i < N; ++i)
+    for (unsigned int i = 0; i < N; ++i) {
       (*this)[i] = x[i];
+    }
     return *this;
   }
 
   void CheckEquals(const T (&x)[N]) const {
-    for (unsigned int i = 0; i < N; ++i)
+    for (unsigned int i = 0; i < N; ++i) {
       (*this)[i].CheckEquals(x[i]);
+    }
   }
 
 protected:
   void EnsureElem(int i) const {
     CheckIndex(i, N);
-    if (fElems[i])
+    if (fElems[i]) {
       return; // element already created
-
+    }
     if (fType != kFlat || TreeHasLeaf(fTree, IndexField())) {
       // Regular out-of-line array, handled the same as a vector.
       EnsureIdxP();
-      fElems[i] = new Proxy<T>(fTree, Subscript(i), fIdx, i);
+      fElems[i] =
+          std::make_unique<Proxy<T>>(fTree, Subscript(i), fIdx, i, nullptr);
     } else {
       // No ..idx field implies this is an "inline" array where the elements
       // are in individual branches like foo.0.bar
       const std::string dotname = fName + "." + std::to_string(i);
-      fElems[i] = new Proxy<T>(fTree, dotname, fBase, fOffset);
+      fElems[i] =
+          std::make_unique<Proxy<T>>(fTree, dotname, fBase, fOffset, nullptr);
     }
   }
 
-  mutable std::array<Proxy<T> *, N> fElems;
+  mutable std::array<std::unique_ptr<Proxy<T>>, N> fElems;
 };
 
 // Retain an alias to the old naming scheme for now
@@ -359,14 +399,15 @@ public:
     // Restore values in reverse, i.e. in first-in, last-out order so that if
     // a value was edited multiple time it will eventually be restored to its
     // original value.
-    for (auto it = fVals.rbegin(); it != fVals.rend(); ++it)
-      *it->first = it->second;
+    for (auto &[p, v] : fVals) {
+      p = v;
+    }
   }
 
-  void Add(T *p, T v) { fVals.emplace_back(p, v); }
+  void Add(T &p, T v) { fVals.emplace_back(p, v); }
 
 protected:
-  std::vector<std::pair<T *, T>> fVals;
+  std::vector<std::pair<std::reference_wrapper<T>, T>> fVals;
 };
 
 class Restorer : public RestorerT<char>,
@@ -386,36 +427,43 @@ class Restorer : public RestorerT<char>,
                  RestorerT<std::string> {
 public:
   template <class T> void Add(Proxy<T> &p) {
-    RestorerT<typename Proxy<T>::U>::Add(&p.fVal, p.GetValue());
+    RestorerT<typename Proxy<T>::U>::Add(p.fVal, p.GetValue());
   }
 };
 
 class SRProxySystController {
 public:
   static bool AnyShifted() {
-    for (const Restorer *r : fRestorers)
-      if (r)
+    for (auto const &r : fRestorers) {
+      if (r) {
         return true;
+      }
+    }
     return false;
   }
 
-  static void BeginTransaction() { fRestorers.push_back(0); }
+  static void BeginTransaction() { fRestorers.push_back(nullptr); }
 
   static bool InTransaction() { return !fRestorers.empty(); }
 
   static void Rollback() {
-    assert(!fRestorers.empty());
-    if (fRestorers.back())
+    if (fRestorers.empty()) {
+      throw std::runtime_error(
+          "During SRProxySystController::Rollback, fRestorers was empty.");
+    }
+
+    if (fRestorers.back()) {
       ++fGeneration;
-    delete fRestorers.back();
+    }
     fRestorers.pop_back();
   }
 
   /// May be useful in the implementation of caches that ought to be
   /// invalidated when systematic shifts are applied.
   static long long Generation() {
-    if (!InTransaction())
+    if (!InTransaction()) {
       return 0; // nominal
+    }
     return fGeneration;
   }
 
@@ -426,39 +474,45 @@ protected:
     assert(!fRestorers.empty());
     if (!fRestorers.back()) {
       ++fGeneration;
-      fRestorers.back() = new Restorer;
+      fRestorers.back() = std::make_unique<Restorer>();
     }
     fRestorers.back()->Add(p);
   }
 
-  static std::vector<Restorer *> fRestorers;
+  static std::vector<std::unique_ptr<Restorer>> fRestorers;
   static long long fGeneration;
 };
 
 } // namespace caf
 
-template <class T> inline T min(const caf::Proxy<T> &a, T b) {
+namespace std {
+template <class T> T min(const caf::Proxy<T> &a, T b) {
   return std::min(a.GetValue(), b);
 }
 
-template <class T> inline T min(T a, const caf::Proxy<T> &b) {
+template <class T> T min(T a, const caf::Proxy<T> &b) {
   return std::min(a, b.GetValue());
 }
 
-template <class T> inline T max(const caf::Proxy<T> &a, T b) {
+template <class T> T max(const caf::Proxy<T> &a, T b) {
   return std::max(a.GetValue(), b);
 }
 
-template <class T> inline T max(T a, const caf::Proxy<T> &b) {
+template <class T> T max(T a, const caf::Proxy<T> &b) {
   return std::max(a, b.GetValue());
 }
 
 // We override these two so that the callers don't trigger the warning
 // printout from operator T.
-template <class T> inline bool isnan(const caf::Proxy<T> &x) {
+template <class T> bool isnan(const caf::Proxy<T> &x) {
   return std::isnan(x.GetValue());
 }
 
-template <class T> inline bool isinf(const caf::Proxy<T> &x) {
+template <class T> bool isinf(const caf::Proxy<T> &x) {
   return std::isinf(x.GetValue());
 }
+} // namespace std
+
+// There are also versions of these not in std:: that we want to override
+using std::isinf;
+using std::isnan;

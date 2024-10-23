@@ -15,7 +15,25 @@ GenSRProxy(
   VVERBOSE
   )
 
-add_library(test_proxy SHARED TestTargetproxy.cxx)
+GenSRProxy(
+  HEADER test.h
+  FLAT
+  OUTPUT_NAME TestTargetflat
+  TARGETNAME test::TestTarget
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+  PROLOG prolog.h
+  EPILOG_FWD epilog_fwd.h
+  EPILOG epilog.h
+  EXTRAS 
+    TestConstituentA extraA.h
+    TestConstituentC extraC.h
+  DEFINITIONS 
+    NEEDTHISTOBUILD=int
+    REVEAL_TestTarget
+  VVERBOSE
+  )
+
+add_library(test_proxy SHARED TestTargetproxy.cxx TestTargetflat.cxx)
 target_compile_definitions(test_proxy PUBLIC NEEDTHISTOBUILD=int REVEAL_TestTarget)
 target_include_directories(test_proxy PUBLIC 
   ${CMAKE_CURRENT_SOURCE_DIR} 
