@@ -119,6 +119,7 @@ std::string GetShortFlatType(std::string classname) {
 }
 
 void WalkClass(TClass *cls, std::vector<std::string> &Declarations,
+               std::vector<std::string> &EDeclarations,
                std::string indent = "") {
   if (!cls) {
     std::cout << "[ERROR]: WalkClass was passed a nullptr." << std::endl;
@@ -154,7 +155,8 @@ void WalkClass(TClass *cls, std::vector<std::string> &Declarations,
       if (verbose) {
         fmt::print("{}Walking RTTI tree for class: \"{}\"\n", indent, vvt);
       }
-      WalkClass(TClass::GetClass(vvt.c_str()), Declarations, indent + "- ");
+      WalkClass(TClass::GetClass(vvt.c_str()), Declarations, EDeclarations,
+                indent + "- ");
     }
 
     // We don't need to emit a proxy class for the vector template itself
@@ -181,7 +183,7 @@ void WalkClass(TClass *cls, std::vector<std::string> &Declarations,
       fmt::print("{}Walking RTTI tree for base class: \"{}\"\n", indent,
                  bcls->GetName());
     }
-    WalkClass(bcls, Declarations, indent + "- ");
+    WalkClass(bcls, Declarations, EDeclarations, indent + "- ");
   }
 
   // Loop through this classes public data members, checking if we need to emit
@@ -249,7 +251,8 @@ void WalkClass(TClass *cls, std::vector<std::string> &Declarations,
         if (verbose) {
           fmt::print("{}Walking RTTI tree for class: \"{}\"\n", indent, vvt);
         }
-        WalkClass(TClass::GetClass(vvt.c_str()), Declarations, indent + "- ");
+        WalkClass(TClass::GetClass(vvt.c_str()), Declarations, EDeclarations,
+                  indent + "- ");
       }
 
     } else if (!IsStandardTypeOrEnum(dm)) {
@@ -257,8 +260,19 @@ void WalkClass(TClass *cls, std::vector<std::string> &Declarations,
         fmt::print("{}Walking RTTI tree for class: \"{}\"\n", indent,
                    dm.GetTypeName());
       }
-      WalkClass(TClass::GetClass(dm.GetTypeName()), Declarations,
+      WalkClass(TClass::GetClass(dm.GetTypeName()), Declarations, EDeclarations,
                 indent + "- ");
+    } else if (dm.IsEnum()) {
+
+      // Add this type to the list of types if we don't already know about it
+      if (std::find(EDeclarations.begin(), EDeclarations.end(),
+                    dm.GetTypeName()) == EDeclarations.end()) {
+        if (verbose) {
+          fmt::print("{}Storing declaration of enum: \"{}\"\n", indent,
+                     dm.GetTypeName());
+        }
+        EDeclarations.push_back(dm.GetTypeName());
+      }
     }
   }
 
@@ -340,8 +354,8 @@ void EmitClass(std::string classname, fmt::ostream &out_hdr,
     nbases++;
   }
 
-  //base classes need their Proxies to inherit from Lineage
-  if(!gen_flat && (nbases == 0)){
+  // base classes need their Proxies to inherit from Lineage
+  if (!gen_flat && (nbases == 0)) {
     inits << " Lineage(parent),\n";
     base_declaration = " : public caf::Lineage";
   }
@@ -380,8 +394,8 @@ void EmitClass(std::string classname, fmt::ostream &out_hdr,
             mname)) { // Don't re-declare members of the base class
       continue;
     }
-    
-    //Check if the data member is static and skip if it is
+
+    // Check if the data member is static and skip if it is
 
     std::string mptype = fmt::format(
         gen_flat ? "flat::Flat<{}>" : "caf::Proxy<{}>", GetTypeName(dm));
@@ -663,10 +677,11 @@ int main(int argc, char const *argv[]) {
   }
 
   std::vector<std::string> Declarations;
+  std::vector<std::string> EDeclarations;
   if (verbose) {
     fmt::print("Walking RTTI tree for class: \"{}\"\n", target_class);
   }
-  WalkClass(tcls, Declarations, "- ");
+  WalkClass(tcls, Declarations, EDeclarations, "- ");
 
   if (prolog_file.size()) {
     if (verbose) {
@@ -756,6 +771,15 @@ int main(int argc, char const *argv[]) {
   //{1} == Input
   out_impl.print(gen_flat ? tmplt::flat::cxx_prolog : tmplt::proxy::cxx_prolog,
                  fmt::format("{}{}.h", output_path, output_file), input_header);
+
+  for (auto enumname : EDeclarations) {
+    if (verbose) {
+      fmt::print("Emitting explicit template instantiation for enum: \"{}\"\n",
+                 enumname);
+    }
+    out_impl.print("template class {}<{}>;\n",
+                   gen_flat ? "flat::Flat" : "caf::Proxy", enumname);
+  }
 
   for (auto classname : Declarations) {
     if (verbose) {

@@ -136,13 +136,13 @@ protected:
 
   // The type to fetch from the TLeaf - get template errors inside of ROOT
   // for enums.
-  typedef typename std::conditional_t<std::is_enum_v<T>, int, T> U;
+  using ValT = std::conditional_t<std::is_enum_v<T>, int, T>;
 
   // Shared
   std::string fName;
   CAFType fType;
   mutable TLeaf *fLeaf;
-  mutable U fVal;
+  mutable ValT fVal;
   TTree *fTree;
 
   // Flat
@@ -429,7 +429,7 @@ class Restorer : public RestorerT<char>,
                  RestorerT<std::string> {
 public:
   template <class T> void Add(Proxy<T> &p) {
-    RestorerT<typename Proxy<T>::U>::Add(p.fVal, p.GetValue());
+    RestorerT<typename Proxy<T>::ValT>::Add(p.fVal, p.GetValue());
   }
 };
 

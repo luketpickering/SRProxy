@@ -94,7 +94,7 @@ std::string const hdr_prolog = R"(
 #pragma once
 
 {0}
-#include "SRProxy/BasicTypesProxy.h"
+#include "SRProxy/BasicTypesProxy.txx"
 
 #include "{1}FwdDeclare.h"
 
