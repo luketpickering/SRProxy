@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Rtypes.h"
+
 #include <array>
 #include <cassert>
 #include <cmath> // for std::isinf and std::isnan

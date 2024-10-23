@@ -3,6 +3,7 @@
 #include "SRProxy/IBranchPolicy.h"
 
 #include "TTree.h"
+#include "Rtypes.h"
 
 #include <array>
 #include <string>
