@@ -323,7 +323,14 @@ template <class T> T Proxy<T>::GetValueFlat() const {
 
 template <class T>
 void EvalInstanceWrapper(std::unique_ptr<TTreeFormula> &ttf, T &x) {
-  x = ttf->EvalInstance<T>(0);
+  static_assert(std::is_integral_v<T> || std::is_floating_point_v<T>,
+                "Can only TTreeFormula::EvalInstance on a integral or a "
+                "floating point type.");
+  if constexpr (std::is_integral_v<T>) {
+    x = ttf->EvalInstance<Long64_t>(0);
+  } else if constexpr (std::is_floating_point_v<T>) {
+    x = ttf->EvalInstance<Double_t>(0);
+  }
 }
 
 void EvalInstanceWrapper(std::unique_ptr<TTreeFormula> &ttf, std::string &x) {
