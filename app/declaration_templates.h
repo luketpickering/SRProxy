@@ -110,7 +110,7 @@ std::string const hdr_body = R"(
 template<> class {1}{2}
 {{
 public:
-  Proxy(TTree *tr, const std::string &name, const long &base, int offset);
+  Proxy(TTree *tr, const std::string &name, const long &base, int offset, const Lineage * parent = nullptr);
   Proxy(TTree *tr, const std::string &name) : Proxy(tr, name, kDummyBase, 0) {{}}
   Proxy(const Proxy&) = delete;
   Proxy(const Proxy&&) = delete;
@@ -145,7 +145,7 @@ namespace
 //{3} == AssignBody
 //{4} == CheckEqualsBody
 std::string const cxx_body = R"(
-{0}::Proxy(TTree *tr, const std::string &name, const long &base, int offset) :
+{0}::Proxy(TTree* tr, const std::string& name, const long& base, int offset, const Lineage * parent) :
 {1}
 {{
 }}
@@ -172,11 +172,11 @@ namespace caf
 )";
 
 //{0} == ProxyBaseType
-std::string const base_init = "  {0}(tr, name, base, offset),\n";
+std::string const base_init = "  {0}(tr, name, base, offset, parent),\n";
 
 //{0} == MemberName
 std::string const member_init =
-    "  {0}(tr, Join(name, \"{0}\"), base, offset),\n";
+    "  {0}(tr, Join(name, \"{0}\"), base, offset, this),\n";
 
 } // namespace proxy
 

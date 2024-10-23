@@ -315,6 +315,7 @@ void EmitClass(std::string classname, fmt::ostream &out_hdr,
   std::string base_declaration;
   std::set<std::string> base_members;
 
+  size_t nbases = 0;
   for (auto base_to : *cls->GetListOfBases()) {
     auto bcls = dynamic_cast<TBaseClass *>(base_to)->GetClassPointer();
 
@@ -335,6 +336,14 @@ void EmitClass(std::string classname, fmt::ostream &out_hdr,
       auto &dm = dynamic_cast<TDataMember &>(*dm_to);
       base_members.insert(dm.GetName());
     }
+
+    nbases++;
+  }
+
+  //base classes need their Proxies to inherit from Lineage
+  if(!gen_flat && (nbases == 0)){
+    inits << " Lineage(parent),\n";
+    base_declaration = " : public caf::Lineage";
   }
 
   std::vector<TDataMember *> DataMembers;
