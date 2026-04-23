@@ -54,7 +54,7 @@ public:
 
   pybind11::object next() {
     if (ientry < nentries) {
-      sr_chain->GetEntry(ientry++);
+      sr_chain->LoadTree(ientry++);
       return py::cast(srp.get());
     } else {
       return py::none();
