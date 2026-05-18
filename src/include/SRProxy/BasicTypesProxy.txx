@@ -519,7 +519,7 @@ void ArrayVectorProxyBase::CheckIndex(size_t i, size_t size) const {
   // crashes.
   if (i >= size) {
     std::stringstream ss;
-    ss << fName << "[" << (signed)i << "] out of range (" << fName
+    ss << fName << "[" << static_cast<signed>(i) << "] out of range (" << fName
        << ".size() == " << size << "). Aborting.";
     throw std::runtime_error(ss.str());
   }
