@@ -244,7 +244,7 @@ template <class T> T Proxy<T>::GetValue() const {
     return GetValueFlat();
   }
   case kCopiedRecord: {
-    return (T)fVal;
+    return static_cast<T>(fVal);
   }
   default: {
     std::stringstream ss;
@@ -280,8 +280,10 @@ template <class T> void GetTypedValueWrapper(TLeaf *leaf, T &x, int subidx) {
 
 //----------------------------------------------------------------------
 void GetTypedValueWrapper(TLeaf *leaf, std::string &x, int subidx) {
-  assert(subidx == 0); // Unused for flat trees at least
-  x = (char *)leaf->GetValuePointer();
+  if (subidx != 0){
+    throw std::runtime_error("Expecting subidx == 0");
+  } // Unused for flat trees at least
+  x = static_cast<char *>(leaf->GetValuePointer());
 }
 
 //----------------------------------------------------------------------
@@ -290,7 +292,7 @@ template <class T> T Proxy<T>::GetValueFlat() const {
 
   // Valid cached or systematically-shifted value
   if (fEntry == fTree->GetReadEntry()) {
-    return (T)fVal;
+    return static_cast<T>(fVal);
   }
   fEntry = fTree->GetReadEntry();
 
@@ -318,7 +320,7 @@ template <class T> T Proxy<T>::GetValueFlat() const {
 
   GetTypedValueWrapper(fLeaf, fVal, fBase + fOffset);
 
-  return (T)fVal;
+  return static_cast<T>(fVal);
 }
 
 template <class T>
@@ -343,7 +345,7 @@ template <class T> T Proxy<T>::GetValueNested() const {
 
   // Valid cached or systematically-shifted value
   if (fEntry == fTree->GetReadEntry()) {
-    return (T)fVal;
+    return static_cast<T>(fVal);
   }
   fEntry = fTree->GetReadEntry();
 
@@ -403,7 +405,7 @@ template <class T> T Proxy<T>::GetValueNested() const {
     GetTypedValueWrapper(fLeaf, fVal, fSubIdx);
   }
 
-  return (T)fVal;
+  return static_cast<T>(fVal);
 }
 
 //----------------------------------------------------------------------
