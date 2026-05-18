@@ -20,9 +20,6 @@
 #include <climits>
 #include <unistd.h>
 
-#define HOST_NAME_MAX 256
-#define LOGIN_NAME_MAX 256
-
 int verbose = 0;
 bool order_alphabetically = false;
 bool emit_python = false;
