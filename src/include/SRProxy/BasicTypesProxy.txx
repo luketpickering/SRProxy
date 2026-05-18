@@ -128,8 +128,8 @@ void SRBranchRegistry::Print(bool abbrev) {
   std::string prev;
   for (std::string b : fgBranches) {
     if (abbrev) {
-      unsigned int cutto = 0;
-      for (unsigned int i = 0; i < std::min(b.size(), prev.size()); ++i) {
+      size_t cutto = 0;
+      for (size_t i = 0; i < std::min(b.size(), prev.size()); ++i) {
         if (b[i] != prev[i]) {
           break;
         }
@@ -138,7 +138,7 @@ void SRBranchRegistry::Print(bool abbrev) {
         }
       }
       prev = b;
-      for (unsigned int i = 0; i < cutto; ++i) {
+      for (size_t i = 0; i < cutto; ++i) {
         b[i] = ' ';
       }
     }
@@ -196,7 +196,7 @@ std::string StripSubscripts(const std::string &s) {
 
 //----------------------------------------------------------------------
 int NSubscripts(const std::string &name) {
-  return std::count(name.begin(), name.end(), '[');
+  return static_cast<int>(std::count(name.begin(), name.end(), '['));
 }
 
 //----------------------------------------------------------------------
@@ -244,7 +244,7 @@ template <class T> T Proxy<T>::GetValue() const {
     return GetValueFlat();
   }
   case kCopiedRecord: {
-    return (T)fVal;
+    return static_cast<T>(fVal);
   }
   default: {
     std::stringstream ss;
@@ -280,8 +280,10 @@ template <class T> void GetTypedValueWrapper(TLeaf *leaf, T &x, int subidx) {
 
 //----------------------------------------------------------------------
 void GetTypedValueWrapper(TLeaf *leaf, std::string &x, int subidx) {
-  assert(subidx == 0); // Unused for flat trees at least
-  x = (char *)leaf->GetValuePointer();
+  if (subidx != 0){
+    throw std::runtime_error("Expecting subidx == 0");
+  } // Unused for flat trees at least
+  x = static_cast<char *>(leaf->GetValuePointer());
 }
 
 //----------------------------------------------------------------------
@@ -290,7 +292,7 @@ template <class T> T Proxy<T>::GetValueFlat() const {
 
   // Valid cached or systematically-shifted value
   if (fEntry == fTree->GetReadEntry()) {
-    return (T)fVal;
+    return static_cast<T>(fVal);
   }
   fEntry = fTree->GetReadEntry();
 
@@ -316,9 +318,9 @@ template <class T> T Proxy<T>::GetValueFlat() const {
 
   fBranch->GetEntry(fEntry);
 
-  GetTypedValueWrapper(fLeaf, fVal, fBase + fOffset);
+  GetTypedValueWrapper(fLeaf, fVal, static_cast<int>(fBase + fOffset));
 
-  return (T)fVal;
+  return static_cast<T>(fVal);
 }
 
 template <class T>
@@ -327,9 +329,9 @@ void EvalInstanceWrapper(std::unique_ptr<TTreeFormula> &ttf, T &x) {
                 "Can only TTreeFormula::EvalInstance on a integral or a "
                 "floating point type.");
   if constexpr (std::is_integral_v<T>) {
-    x = ttf->EvalInstance<Long64_t>(0);
+    x = static_cast<T>(ttf->EvalInstance<Long64_t>(0));
   } else if constexpr (std::is_floating_point_v<T>) {
-    x = ttf->EvalInstance<Double_t>(0);
+    x = static_cast<T>(ttf->EvalInstance<Double_t>(0));
   }
 }
 
@@ -343,7 +345,7 @@ template <class T> T Proxy<T>::GetValueNested() const {
 
   // Valid cached or systematically-shifted value
   if (fEntry == fTree->GetReadEntry()) {
-    return (T)fVal;
+    return static_cast<T>(fVal);
   }
   fEntry = fTree->GetReadEntry();
 
@@ -403,7 +405,7 @@ template <class T> T Proxy<T>::GetValueNested() const {
     GetTypedValueWrapper(fLeaf, fVal, fSubIdx);
   }
 
-  return (T)fVal;
+  return static_cast<T>(fVal);
 }
 
 //----------------------------------------------------------------------
@@ -517,7 +519,7 @@ void ArrayVectorProxyBase::CheckIndex(size_t i, size_t size) const {
   // crashes.
   if (i >= size) {
     std::stringstream ss;
-    ss << fName << "[" << (signed)i << "] out of range (" << fName
+    ss << fName << "[" << static_cast<signed>(i) << "] out of range (" << fName
        << ".size() == " << size << "). Aborting.";
     throw std::runtime_error(ss.str());
   }
@@ -611,7 +613,7 @@ std::string ArrayVectorProxyBase::IndexField() const {
 }
 
 //----------------------------------------------------------------------
-std::string ArrayVectorProxyBase::Subscript(int i) const {
+std::string ArrayVectorProxyBase::Subscript(size_t i) const {
   // Only have to do the at() business for the nested case for subscripts
   // from the 3rd one on
   if (fType != kNested || NSubscripts(fName) < 2) {
@@ -670,7 +672,7 @@ bool VectorProxyBase::empty() const { return size() == 0; }
 //----------------------------------------------------------------------
 void VectorProxyBase::resize(size_t i) {
   EnsureSizeExists();
-  *fSize = i;
+  *fSize = static_cast<int>(i);
 }
 
 } // namespace caf
