@@ -128,8 +128,8 @@ void SRBranchRegistry::Print(bool abbrev) {
   std::string prev;
   for (std::string b : fgBranches) {
     if (abbrev) {
-      unsigned int cutto = 0;
-      for (unsigned int i = 0; i < std::min(b.size(), prev.size()); ++i) {
+      size_t cutto = 0;
+      for (size_t i = 0; i < std::min(b.size(), prev.size()); ++i) {
         if (b[i] != prev[i]) {
           break;
         }
@@ -138,7 +138,7 @@ void SRBranchRegistry::Print(bool abbrev) {
         }
       }
       prev = b;
-      for (unsigned int i = 0; i < cutto; ++i) {
+      for (size_t i = 0; i < cutto; ++i) {
         b[i] = ' ';
       }
     }
@@ -196,7 +196,7 @@ std::string StripSubscripts(const std::string &s) {
 
 //----------------------------------------------------------------------
 int NSubscripts(const std::string &name) {
-  return std::count(name.begin(), name.end(), '[');
+  return static_cast<int>(std::count(name.begin(), name.end(), '['));
 }
 
 //----------------------------------------------------------------------
@@ -318,7 +318,7 @@ template <class T> T Proxy<T>::GetValueFlat() const {
 
   fBranch->GetEntry(fEntry);
 
-  GetTypedValueWrapper(fLeaf, fVal, fBase + fOffset);
+  GetTypedValueWrapper(fLeaf, fVal, static_cast<int>(fBase + fOffset));
 
   return static_cast<T>(fVal);
 }
@@ -329,9 +329,9 @@ void EvalInstanceWrapper(std::unique_ptr<TTreeFormula> &ttf, T &x) {
                 "Can only TTreeFormula::EvalInstance on a integral or a "
                 "floating point type.");
   if constexpr (std::is_integral_v<T>) {
-    x = ttf->EvalInstance<Long64_t>(0);
+    x = static_cast<T>(ttf->EvalInstance<Long64_t>(0));
   } else if constexpr (std::is_floating_point_v<T>) {
-    x = ttf->EvalInstance<Double_t>(0);
+    x = static_cast<T>(ttf->EvalInstance<Double_t>(0));
   }
 }
 
@@ -672,7 +672,7 @@ bool VectorProxyBase::empty() const { return size() == 0; }
 //----------------------------------------------------------------------
 void VectorProxyBase::resize(size_t i) {
   EnsureSizeExists();
-  *fSize = i;
+  *fSize = static_cast<int>(i);
 }
 
 } // namespace caf

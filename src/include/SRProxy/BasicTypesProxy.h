@@ -326,7 +326,7 @@ protected:
     // note that the contained elements should point to the vector's parent, not
     // the vector
     if (!fElems[i]) {
-      fElems[i] = std::make_unique<Proxy<T>>(fTree, Subscript(i), fIdx, i,
+      fElems[i] = std::make_unique<Proxy<T>>(fTree, Subscript(i), fIdx, static_cast<int>(i),
                                              this->Parent());
     }
   }
@@ -410,7 +410,7 @@ protected:
       // Regular out-of-line array, handled the same as a vector.
       EnsureIdxP();
       fElems[i] =
-          std::make_unique<Proxy<T>>(fTree, Subscript(i), fIdx, i, nullptr);
+          std::make_unique<Proxy<T>>(fTree, Subscript(i), fIdx, static_cast<int>(i), nullptr);
     } else {
       // No ..idx field implies this is an "inline" array where the elements
       // are in individual branches like foo.0.bar
