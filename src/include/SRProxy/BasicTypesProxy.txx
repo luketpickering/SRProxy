@@ -1,5 +1,7 @@
 #include "SRProxy/BasicTypesProxy.h"
 
+#include "SRProxy/Exceptions.h"
+
 #include "TError.h"
 #include "TFile.h"
 #include "TFormLeafInfo.h"
@@ -301,11 +303,11 @@ template <class T> T Proxy<T>::GetValueFlat() const {
     fBranch = fTree->GetBranch(sname.c_str());
     fLeaf = fBranch ? fBranch->GetLeaf(sname.c_str()) : 0;
 
+    // maybe the user wants to test if their branch is missing and do some other
+    // action instead?
     if (!fLeaf) {
-      std::stringstream ss;
-      ss << "BasicTypeProxy: Branch '" << sname << "' not found in tree '"
-         << fTree->GetName() << "'.";
-      throw std::runtime_error(ss.str());
+      throw caf::MissingBranchException("BasicTypesProxy", sname,
+                                        fTree->GetName());
     }
 
     if (fName.find("..idx") == std::string::npos &&
