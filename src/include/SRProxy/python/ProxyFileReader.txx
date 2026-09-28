@@ -13,6 +13,7 @@ namespace py = pybind11;
 template <typename T> class ProxyFileReader {
 
   std::unique_ptr<TChain> sr_chain;
+  TTree const * c_tree;
   std::unique_ptr<caf::Proxy<T>> srp;
 
   size_t nentries;
@@ -38,8 +39,9 @@ public:
     if (fwsl_pos != std::string::npos) {
       tname = tname.substr(fwsl_pos + 1);
     }
+    c_tree = sr_chain->GetTree();
 
-    srp = std::make_unique<caf::Proxy<T>>(sr_chain.get(), tname);
+    srp = std::make_unique<caf::Proxy<T>>(c_tree, tname);
   }
 
   ProxyFileReader(std::string const &chname, std::string const &infiles)
@@ -54,7 +56,13 @@ public:
 
   pybind11::object next() {
     if (ientry < nentries) {
+
       sr_chain->GetEntry(ientry++);
+      if(c_tree != sr_chain->GetTree()){
+        c_tree = sr_chain->GetTree();
+        srp = std::make_unique<caf::Proxy<T>>(c_tree, tname);
+      }
+
       return py::cast(srp.get());
     } else {
       return py::none();
