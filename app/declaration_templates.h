@@ -45,6 +45,11 @@ std::string const cxx_prolog = R"(
 #include "{0}"
 
 #include "{1}"
+
+#include "TChain.h"
+
+#include <stdexcept>
+
 )";
 
 //{0} == FlatType
@@ -56,6 +61,7 @@ std::string const cxx_body = R"(
 {0}::Flat(TTree *tr, const std::string &prefix, const std::string &totsize, const IBranchPolicy *policy) :
 {1}
 {{
+if(dynamic_cast<TChain*>(tr)){{throw std::runtime_error("{0} instantiated with TChain, which is not supported and will lead to errors.");}}
 }}
 
 void {0}::Fill(const {2}& sr)
@@ -130,6 +136,10 @@ std::string const cxx_prolog = R"(
 
 #include "{1}"
 
+#include "TChain.h"
+
+#include <stdexcept>
+
 namespace
 {{
   std::string Join(const std::string &a, const std::string &b)
@@ -149,6 +159,7 @@ std::string const cxx_body = R"(
 {0}::Proxy(TTree* tr, const std::string& name, const long& base, int offset, const Lineage * parent) :
 {1}
 {{
+if(dynamic_cast<TChain*>(tr)){{throw std::runtime_error("{0} instantiated with TChain, which is not supported and will lead to errors.");}}
 }}
 
 {0}& {0}::operator=(const {2}& sr)
