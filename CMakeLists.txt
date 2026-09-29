@@ -17,6 +17,8 @@ option(SRProxy_TEST_PYTHON_BINDINGS "Whether to enable test of python bindings, 
 
 LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake/Modules)
 
+include(GNUInstallDirs)
+
 include(CPM)
 
 CPMAddPackage(
@@ -52,13 +54,13 @@ configure_package_config_file(
 
 install(EXPORT SRProxyTargets
         NAMESPACE SRProxy::
-        DESTINATION lib/cmake/SRProxy)
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SRProxy)
 install(FILES "${PROJECT_BINARY_DIR}/SRProxyConfigVersion.cmake"
               "${PROJECT_BINARY_DIR}/SRProxyConfig.cmake"
               "${PROJECT_SOURCE_DIR}/cmake/Modules/GenSRProxy.cmake"
-        DESTINATION lib/cmake/SRProxy)
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SRProxy)
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/cmake/Templates/setup.SRProxy.sh.in
   ${PROJECT_BINARY_DIR}/setup.SRProxy.sh @ONLY)
-install(PROGRAMS ${PROJECT_BINARY_DIR}/setup.SRProxy.sh DESTINATION bin)
+install(PROGRAMS ${PROJECT_BINARY_DIR}/setup.SRProxy.sh DESTINATION ${CMAKE_INSTALL_BINDIR})
 
