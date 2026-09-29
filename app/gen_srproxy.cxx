@@ -529,6 +529,8 @@ Required arguments:
 Optional arguments:
   -I <path>                      : A directory to add to the include path
   -D <symbol>[=val]              : A symbol definition, with optional value, to the interpreter before parsing
+  --extra-cflags <flags>         : A compatibility option with castxml-based SRProxy. Ignored passed compiler flags
+                                     and picks up any -D<> and -I<> style flags included.
 
   --flat                         : Generate a 'flat' file reader rather than the objectified proxy class
 
@@ -568,6 +570,11 @@ void ParseOpts(int argc, char const *argv[]) {
       } else if (arg.substr(0, 2) == "-I") {
         opt_split.push_back("-I");
         opt_split.push_back(arg.substr(2));
+      } else if (arg.substr(0, 2) == "-f") {
+        std::cout << "[WARNING]: Ignoring passed compiler-style flag " << arg
+        << ". \n[WARNING]: cling cannot accept arbitrary compiler flags, but it"
+        " shouldn't need to. Check if you really need this to parse (n.b. not "
+        "compile or link) the SRProxy headers." << std::endl;
       } else {
         opt_split.push_back(arg);
       }
@@ -609,6 +616,8 @@ void ParseOpts(int argc, char const *argv[]) {
         continue;
       } else if ((arg == "-o") || (arg == "--output")) {
         output_file = opt_split[++opt_it];
+        continue;
+      } else if ((arg == "--extra-cflags")) {
         continue;
       } else if ((arg == "-op") || (arg == "--output-path")) {
         output_path = opt_split[++opt_it];
