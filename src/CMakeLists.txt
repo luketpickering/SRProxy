@@ -23,5 +23,5 @@ set_target_properties(SRProxy_all PROPERTIES EXPORT_NAME SRProxy)
 
 install(TARGETS SRProxy_BasicTypes SRProxy_FlatTypes SRProxy_all
   EXPORT SRProxyTargets
-  DESTINATION lib)
+  DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY include/SRProxy DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
