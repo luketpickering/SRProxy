@@ -57,7 +57,7 @@ public:
   pybind11::object next() {
     if (ientry < nentries) {
 
-      sr_chain->GetEntry(ientry++);
+      sr_chain->LoadTree(ientry++);
       if(c_tree != sr_chain->GetTree()){
         c_tree = sr_chain->GetTree();
         srp = std::make_unique<caf::Proxy<T>>(c_tree, tname);
