@@ -1,6 +1,8 @@
 #include <string>
 #include <vector>
 
+#include "testEnums.h"
+
 namespace test {
 
 struct TestBase {
@@ -32,24 +34,6 @@ struct TestConstituentD {
 
 #ifdef REVEAL_TestTarget
 
-enum eA {
- kA = 0,
- kB,
- kC
-};
-
-enum class eB : std::size_t {
-  ka = 500,
-  kb = 1000,
-  kc = 1500
-};
-
-enum class eC {
-  kaa = -500,
-  kbb = -1000,
-  kcc = -1500
-};
-
 struct TestTarget : public TestBase {
   int A;
   float B;
@@ -68,10 +52,7 @@ struct TestTarget : public TestBase {
   std::vector<std::vector<std::vector<std::string>>> vvvs;
 
   void UseD(TestConstituentD const &){}
-
-  // void setA(eA const &){}
-  // void setB(eB const &){}
-  // void setC(std::vector<eC> const &){}
+  void SetBs(std::vector<eB> const &){}
 };
 
 #endif
