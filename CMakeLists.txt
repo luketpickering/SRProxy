@@ -19,13 +19,18 @@ LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake/Modules)
 
 include(GNUInstallDirs)
 
-include(CPM)
+include (FetchContent)
 
-CPMAddPackage(
-    NAME fmt
-    GIT_TAG 10.2.1
-    GITHUB_REPOSITORY fmtlib/fmt
+FetchContent_Declare(
+  spdlog
+  GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_TAG v1.16.0
 )
+SET(SPDLOG_COMPILED_LIB ON)
+SET(SPDLOG_BUILD_SHARED OFF)
+SET(SPDLOG_BUILD_PIC ON)
+SET(SPDLOG_INSTALL ON)
+FetchContent_MakeAvailable(spdlog)
 
 find_package(ROOT 6.20 REQUIRED)
 

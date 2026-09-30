@@ -4,11 +4,26 @@
 
 namespace tmplt {
 
-namespace flat {
+struct Templates {
+  std::string prefix;
+  std::string hdr_prolog;
+  std::string hdr_body;
+  std::string cxx_prolog;
+  std::string cxx_body;
+  std::string fwd_prolog;
+  std::string base_init;
+  std::string member_init;
+};
+
+Templates const flat{
+// -- prefix --
+  "flat::Flat",
+
+// -- hdr_prolog --
 
 //{0} == Prolog
 //{1} == Outpath
-std::string const hdr_prolog = R"(
+R"(
 #pragma once
 
 {0}
@@ -16,14 +31,16 @@ std::string const hdr_prolog = R"(
 
 #include "{1}FwdDeclare.h"
 
-)";
+)",
+
+// -- hdr_body --
 
 //{0} == Type
 //{1} == FlatType
 //{2} == BaseClass
 //{3} == AdditionalClasses
 //{4} == Members
-std::string const hdr_body = R"(
+R"(
 /// Flat encoding of \ref {0}
 template<> class {1}{2}
 {{
@@ -37,11 +54,13 @@ protected:
 {3}
 {4}
 }};
-)";
+)",
+
+// -- cxx_prolog --
 
 //{0} == Header
 //{1} == Input
-std::string const cxx_prolog = R"(
+R"(
 #include "{0}"
 
 #include "{1}"
@@ -50,18 +69,22 @@ std::string const cxx_prolog = R"(
 
 #include <stdexcept>
 
-)";
+)",
+
+// -- cxx_body --
 
 //{0} == FlatType
 //{1} == Inits
 //{2} == Type
 //{3} == FillBody
 //{4} == ClearBody
-std::string const cxx_body = R"(
+R"(
 {0}::Flat(TTree *tr, const std::string &prefix, const std::string &totsize, const IBranchPolicy *policy) :
 {1}
 {{
-if(dynamic_cast<TChain*>(tr)){{throw std::runtime_error("{0} instantiated with TChain, which is not supported and will lead to errors.");}}
+  if(dynamic_cast<TChain*>(tr)){{
+    throw std::runtime_error("{0} instantiated with TChain, which is not supported and will lead to errors.");
+  }}
 }}
 
 void {0}::Fill(const {2}& sr)
@@ -73,30 +96,39 @@ void {0}::Clear()
 {{
 {4}
 }}
-)";
+)",
 
-std::string const fwd_prolog = R"(
+// -- fwd_prolog --
+
+R"(
 #pragma once
 
 namespace flat
-{{
+{
   template<class T> class Flat;
-}}
-)";
+}
+)",
+
+// -- base_init --
 
 //{0} == FlatBaseType
-std::string const base_init = "  {0}(tr, prefix, totsize, policy),\n";
+"  {0}(tr, prefix, totsize, policy),\n",
+
+// -- member_init --
+
 //{0} == MemberName
-std::string const member_init =
-    "  {0}(tr, prefix+\".{0}\", totsize, policy),\n";
+"  {0}(tr, prefix+\".{0}\", totsize, policy),\n"
 
-} // namespace flat
+};
 
-namespace proxy {
+Templates const proxy{
+// -- prefix --
+  "caf::Proxy",
+// -- hdr_prolog --
 
 //{0} == Prolog
 //{1} == Outpath
-std::string const hdr_prolog = R"(
+R"(
 #pragma once
 
 {0}
@@ -104,14 +136,16 @@ std::string const hdr_prolog = R"(
 
 #include "{1}FwdDeclare.h"
 
-)";
+)",
+
+// -- hdr_body --
 
 //{0} == Type
 //{1} == ProxyType
 //{2} == BaseClass
 //{3} == AdditionalClasses
 //{4} == Members
-std::string const hdr_body = R"(
+R"(
 /// Proxy for \ref {0}
 template<> class {1}{2}
 {{
@@ -126,11 +160,13 @@ public:
 {3}
 {4}
 }};
-)";
+)",
+
+// -- cxx_prolog --
 
 //{0} == Header
 //{1} == Input
-std::string const cxx_prolog = R"(
+R"(
 #include "{0}"
 #include "SRProxy/BasicTypesProxy.txx"
 
@@ -148,18 +184,22 @@ namespace
     return a+"."+b;
   }}
 }}
-)";
+)",
+
+// -- cxx_body --
 
 //{0} == ProxyType
 //{1} == Inits
 //{2} == Type
 //{3} == AssignBody
 //{4} == CheckEqualsBody
-std::string const cxx_body = R"(
+R"(
 {0}::Proxy(TTree* tr, const std::string& name, const long& base, int offset, const Lineage * parent) :
 {1}
 {{
-if(dynamic_cast<TChain*>(tr)){{throw std::runtime_error("{0} instantiated with TChain, which is not supported and will lead to errors.");}}
+  if(dynamic_cast<TChain*>(tr)){{
+    throw std::runtime_error("{0} instantiated with TChain, which is not supported and will lead to errors.");
+  }}
 }}
 
 {0}& {0}::operator=(const {2}& sr)
@@ -172,25 +212,30 @@ void {0}::CheckEquals(const {2}& sr) const
 {{
 {4}
 }}
-)";
+)",
 
-std::string const fwd_prolog = R"(
+// -- fwd_prolog --
+
+R"(
 #pragma once
 
 namespace caf
-{{
+{
   template<class T> class Proxy;
-}}
-)";
+}
+)",
+
+// -- base_init --
 
 //{0} == ProxyBaseType
-std::string const base_init = "  {0}(tr, name, base, offset, parent),\n";
+"  {0}(tr, name, base, offset, parent),\n",
+
+// -- member_init --
 
 //{0} == MemberName
-std::string const member_init =
-    "  {0}(tr, Join(name, \"{0}\"), base, offset, this),\n";
+"  {0}(tr, Join(name, \"{0}\"), base, offset, this),\n"
 
-} // namespace proxy
+};
 
 std::string const disclaimer =
     R"(// This file was generated automatically, do not edit it manually
@@ -259,7 +304,6 @@ std::string const lineage_ancestor_cpptype = R"--(
 std::string const module_declaration = R"(
 PYBIND11_MODULE(py{0}, m) {{
 )";
-
 
 std::string const lineage_ancestor_type_pydeclaration = R"--(
   py::class_<caf::Lineage> pyLineage(m, "Lineage");
