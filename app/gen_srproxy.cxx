@@ -361,7 +361,7 @@ std::string GetPythonClassName(std::string classname) {
 
 } // namespace typeutils
 
-std::set<std::string> types_to_proxy;
+std::vector<std::string> types_to_proxy;
 
 std::string indent = "";
 
@@ -372,7 +372,8 @@ void WalkClass(TClass *cls) {
   }
 
   // We have already walked this type
-  if (types_to_proxy.count(cls->GetName())) {
+  if (std::find(types_to_proxy.begin(), types_to_proxy.end(), cls->GetName()) !=
+      types_to_proxy.end()) {
     spdlog::trace("{}Already known class: \"{}\"", indent, cls->GetName());
     return;
   }
@@ -394,7 +395,12 @@ void WalkClass(TClass *cls) {
     // to proxy the vector value type
     if (typeutils::KnownClass(vvt)) {
       if (gInterpreter->ClassInfo_IsEnum(vvt.c_str())) {
-        types_to_proxy.insert(vvt);
+        // Add this type to the list of types if we don't already know about it
+        if (std::find(types_to_proxy.begin(), types_to_proxy.end(), vvt) ==
+            types_to_proxy.end()) {
+          spdlog::debug("{}Storing declaration of enum: \"{}\"", indent, vvt);
+          types_to_proxy.push_back(vvt);
+        }
       } else {
         indent += "- ";
         spdlog::debug("{}Walking RTTI tree for class: \"{}\"", indent, vvt);
@@ -406,9 +412,6 @@ void WalkClass(TClass *cls) {
     // We don't need to emit a proxy class for the vector template itself
     return;
   }
-
-  spdlog::debug("{}Registering known class: \"{}\"", indent, cls->GetName());
-  types_to_proxy.insert(cls->GetName());
 
   spdlog::trace("{}Class {}, has {} base classes.", indent, cls->GetName(),
                 cls->GetListOfBases()->GetEntries());
@@ -452,8 +455,16 @@ void WalkClass(TClass *cls) {
                     ma->GetTypeName());
 
       if (gInterpreter->ClassInfo_IsEnum(ma->GetTypeName())) {
-        types_to_proxy.insert(ma->GetTypeName());
-      } else {
+
+        // Add this type to the list of types if we don't already know about it
+        if (std::find(types_to_proxy.begin(), types_to_proxy.end(),
+                      ma->GetTypeName()) == types_to_proxy.end()) {
+          spdlog::debug("{}Storing declaration of enum: \"{}\"", indent,
+                        ma->GetTypeName());
+          types_to_proxy.push_back(ma->GetTypeName());
+        }
+
+      } else if (typeutils::KnownClass(ma->GetTypeName())) {
         auto *acls = TClass::GetClass(ma->GetTypeName());
         if (acls != cls) { // skip arguments of yourself
           indent += "- ";
@@ -513,12 +524,19 @@ void WalkClass(TClass *cls) {
     } else if (dm.IsEnum()) {
 
       // Add this type to the list of types if we don't already know about it
-      if (!types_to_proxy.count(dm.GetTypeName())) {
+      if (std::find(types_to_proxy.begin(), types_to_proxy.end(),
+                    dm.GetTypeName()) == types_to_proxy.end()) {
         spdlog::debug("{}Storing declaration of enum: \"{}\"", indent,
                       dm.GetTypeName());
-        types_to_proxy.insert(dm.GetTypeName());
+        types_to_proxy.push_back(dm.GetTypeName());
       }
     }
+  }
+
+  if (std::find(types_to_proxy.begin(), types_to_proxy.end(), cls->GetName()) ==
+      types_to_proxy.end()) {
+    spdlog::debug("{}Registering known class: \"{}\"", indent, cls->GetName());
+    types_to_proxy.push_back(cls->GetName());
   }
 }
 
@@ -641,6 +659,8 @@ struct EmittedCode {
   std::string hdr, impl, fwd, pyb;
 };
 
+std::set<std::string> py_emitted_vector_types;
+
 EmittedCode EmitClass(std::string classname) {
 
   auto const &templates = cli::output::gen_flat ? tmplt::flat : tmplt::proxy;
@@ -745,22 +765,22 @@ EmittedCode EmitClass(std::string classname) {
 
     memberlist << fmt::format(tmplt::member_list, mptype, mname);
 
-    // if (emit_python) {
-    //   if (!typeutils::IsStandardTypeOrEnum(dm) || dm.GetArrayDim()) {
-    //     if (typeutils::IsSTLVector(dm)) {
-    //       vector_types.push_back(GetTypeName(dm));
-    //     }
-    //     memberlist_pyimpl << fmt::format(tmplt::python::datamember_proxy,
-    //     mname,
-    //                                      classname, GetTypeName(dm));
+    if (cli::output::emit_python) {
+      // if its a class or an array of primitives
+      if (!typeutils::IsStandardTypeOrEnum(dm) || dm.GetArrayDim()) {
+        // track value types of vectors
+        if (typeutils::IsSTLVector(dm)) {
+          vector_types.push_back(typeutils::GetTypeName(dm));
+        }
+        memberlist_pyimpl << fmt::format(tmplt::python::datamember_proxy, mname,
+                                         classname, typeutils::GetTypeName(dm));
 
-    //   } else {
-    //     memberlist_pyimpl <<
-    //     fmt::format(tmplt::python::datamember_basic_type,
-    //                                      mname, classname,
-    //                                      GetTypeName(dm));
-    //   }
-    // }
+      } else { // if its a scalar basic type
+        memberlist_pyimpl << fmt::format(tmplt::python::datamember_basic_type,
+                                         mname, classname,
+                                         typeutils::GetTypeName(dm));
+      }
+    }
 
     assign_body << fmt::format(tmplt::assign_member_body, mname);
     checkequals_body << fmt::format(tmplt::checkequals_member_body, mname);
@@ -804,33 +824,30 @@ EmittedCode EmitClass(std::string classname) {
       CutSStream(cli::output::gen_flat ? fill_body : assign_body, 1),
       CutSStream(cli::output::gen_flat ? clear_body : checkequals_body, 1));
 
-  // if (emit_python) {
+  if (cli::output::emit_python) {
+    for (auto const &vector_type : vector_types) {
+      if (!py_emitted_vector_types.count(vector_type)) {
 
-  //   for (auto const &vector_type : vector_types) {
-  //     if (!py_emitted_vector_types.count(vector_type)) {
+        auto vvt = typeutils::GetVectorValueTypeName(vector_type);
+        if (typeutils::KnownClass(vvt)) {
+          ss_pyb << fmt::format(tmplt::python::vector_of_proxies, vector_type,
+                                typeutils::GetPythonClassName(vector_type),
+                                vvt);
+        } else { // builtin type that we can just return rather than returning
+                 // the proxy
+          ss_pyb << fmt::format(tmplt::python::vector_of_basic_types,
+                                vector_type,
+                                typeutils::GetPythonClassName(vector_type));
+        }
 
-  //       auto vvt = typeutils::GetVectorValueTypeName(vector_type);
-  //       if (typeutils::KnownClass(vvt)) {
-  //         out_pyb << fmt::format(tmplt::python::vector_of_proxies,
-  //         vector_type,
-  //                                typeutils::GetPythonClassName(vector_type),
-  //                                vvt);
-  //       } else { // builtin type that we can just return rather than
-  //       returning
-  //                // the proxy
-  //         out_pyb << fmt::format(tmplt::python::vector_of_basic_types,
-  //                                vector_type,
-  //                                typeutils::GetPythonClassName(vector_type));
-  //       }
+        py_emitted_vector_types.insert(vector_type);
+      }
+    }
 
-  //       py_emitted_vector_types.insert(vector_type);
-  //     }
-  //   }
-
-  //   out_pyb << fmt::format(tmplt::python::class_declaration, classname,
-  //                          typeutils::GetPythonClassName(classname));
-  //   out_pyb << memberlist_pyimpl.str() << "\n;";
-  // }
+    ss_pyb << fmt::format(tmplt::python::class_declaration, classname,
+                          typeutils::GetPythonClassName(classname));
+    ss_pyb << memberlist_pyimpl.str() << "\n;";
+  }
   return {ss_hdr.str(), ss_impl.str(), ss_fwd.str(), ss_pyb.str()};
 }
 
@@ -863,6 +880,50 @@ void WriteOutput() {
       fmt::format("{}{}.h", cli::output::path, cli::output::file),
       cli::input::header);
 
+  if (cli::output::emit_python) {
+
+    ss_pyb << fmt::format(tmplt::python::impl_frontmatter, cli::input::header,
+                          cli::output::file);
+
+    ss_pyb << tmplt::python::lineage_ancestor_type_cppdeclaration;
+    int enumid = 0;
+    for (auto tname : types_to_proxy) {
+      if (gInterpreter->ClassInfo_IsEnum(tname.c_str())) {
+        continue;
+      }
+      ss_pyb << fmt::format(tmplt::python::lineage_ancestor_cpptype,
+                            typeutils::GetPythonClassName(tname), enumid++);
+    }
+    ss_pyb << R"(
+    };
+    )";
+
+    ss_pyb << fmt::format(tmplt::python::module_declaration, cli::output::file);
+
+    // build the Proxied class type enum
+    // for use with Lineage::Ancestor on the
+    // python side
+
+    std::stringstream pyenumss, pyancestorss;
+
+    pyenumss << tmplt::python::lineage_ancestor_type_pydeclaration;
+    pyancestorss << tmplt::python::lineage_ancestor_function;
+    enumid = 0;
+    for (auto tname : types_to_proxy) {
+      if (gInterpreter->ClassInfo_IsEnum(tname.c_str())) {
+        continue;
+      }
+      pyenumss << fmt::format(tmplt::python::lineage_ancestor_pytype,
+                              typeutils::GetPythonClassName(tname));
+      pyancestorss << fmt::format(tmplt::python::lineage_ancestor_case,
+                                  typeutils::GetPythonClassName(tname), tname);
+    }
+    pyenumss << tmplt::python::lineage_ancestor_type_pyfinalize;
+    pyancestorss << tmplt::python::lineage_default_rvp;
+
+    ss_pyb << pyenumss.str() << pyancestorss.str();
+  }
+
   for (auto tname : types_to_proxy) {
     if (gInterpreter->ClassInfo_IsEnum(tname.c_str())) {
       spdlog::debug("Emitting explicit template instantiation for enum: \"{}\"",
@@ -890,50 +951,7 @@ void WriteOutput() {
   out_fwd << ss_fwd.str();
 
   if (cli::output::emit_python) {
-    // std::unique_ptr<std::ofstream> out_pyb;
-    // if (cli::output::emit_python) {
 
-    //   (*out_pyb) << fmt::format(tmplt::python::impl_frontmatter,
-    //                             cli::input::header, cli::output::file);
-
-    //   (*out_pyb) << tmplt::python::lineage_ancestor_type_cppdeclaration;
-    //   int enumid = 0;
-    //   for (auto classname : Declarations) {
-    //     (*out_pyb) << fmt::format(tmplt::python::lineage_ancestor_cpptype,
-    //                               typeutils::GetPythonClassName(classname),
-    //                               enumid++);
-    //   }
-    //   (*out_pyb) << R"(
-    // };
-    // )";
-
-    //   (*out_pyb) << fmt::format(tmplt::python::module_declaration,
-    //                             cli::output::file);
-    // }
-    // if (cli::output::emit_python) { // build the Proxied class type enum
-    //   for
-    //     use
-    //         // with
-    //         // Lineage::Ancestor on the python side
-
-    //         std::stringstream pyenumss,
-    //         pyancestorss;
-
-    //   pyenumss << tmplt::python::lineage_ancestor_type_pydeclaration;
-    //   pyancestorss << tmplt::python::lineage_ancestor_function;
-    //   int enumid = 0;
-    //   for (auto classname : Declarations) {
-    //     pyenumss << fmt::format(tmplt::python::lineage_ancestor_pytype,
-    //                             typeutils::GetPythonClassName(classname));
-    //     pyancestorss << fmt::format(tmplt::python::lineage_ancestor_case,
-    //                                 typeutils::GetPythonClassName(classname),
-    //                                 classname);
-    //   }
-    //   pyenumss << tmplt::python::lineage_ancestor_type_pyfinalize;
-    //   pyancestorss << tmplt::python::lineage_default_rvp;
-
-    //   (*out_pyb) << pyenumss.str() << pyancestorss.str();
-    // }
     std::ofstream out_pyb(cli::output::dir + cli::output::file + ".pybind.cxx");
     out_pyb << ss_pyb.str();
     out_pyb << fmt::format(tmplt::python::proxyfilereader,
