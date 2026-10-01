@@ -250,8 +250,13 @@ bool KnownType(std::string name) {
 }
 
 bool KnownClass(std::string name) {
+  // pretend string is a primitive
   if ((name == "string") || (name == "std::string")) {
-    return false; // pretend string is a primitive
+    return false;
+  }
+  // pretend root vectors are primitives to stop us generating a proxy for it
+  if ((name == "TVector3") || (name == "TLorentzVector")) {
+    return false;
   }
   return gInterpreter->ClassInfo_IsValid(
       gInterpreter->ClassInfo_Factory(name.c_str()));
