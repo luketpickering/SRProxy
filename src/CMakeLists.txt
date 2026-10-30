@@ -20,6 +20,7 @@ add_library(SRProxy::FlatTypes ALIAS SRProxy_FlatTypes)
 add_library(SRProxy_all INTERFACE)
 target_link_libraries(SRProxy_all INTERFACE SRProxy::BasicTypes SRProxy::FlatTypes)
 set_target_properties(SRProxy_all PROPERTIES EXPORT_NAME SRProxy)
+add_library(SRProxy::SRProxy ALIAS SRProxy_all)
 
 install(TARGETS SRProxy_BasicTypes SRProxy_FlatTypes SRProxy_all
   EXPORT SRProxyTargets
