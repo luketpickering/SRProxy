@@ -42,9 +42,6 @@ enum CAFType {
 
 CAFType GetCAFType(TTree *tr);
 
-/// Count the subscripts in the name
-int NSubscripts(const std::string &name);
-
 template <class T> struct is_vec {
   static const bool value = false;
 };
